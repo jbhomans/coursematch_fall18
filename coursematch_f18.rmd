@@ -1,22 +1,22 @@
 ---
-title: "CourseMatch Metrics - Fall 2018"
+title: "CourseMatch Analytics - Fall 2018"
 subtitle: "Data Processing for Google Sheet"
 date: "`r format(Sys.time(), '%Y-%m-%d')`"
-#output:
-#  bookdown::html_document2:
-#    css: css/analysis.css
-#    code_folding: hide
-#    df_print: paged
-#    number_sections: yes
-#    self-contained: true
-#    fig_caption: yes
-#    toc: true
-#    toc_float: true
+output:
+  bookdown::html_document2:
+    #css: css/analysis.css
+    code_folding: show
+    df_print: paged
+    number_sections: yes
+    self-contained: true
+    fig_caption: yes
+    toc: true
+    toc_float: true
 params:
   external_queries: false
 ---
 
-```{r setup, include = FALSE}
+```{r setup, include = TRUE}
 #setwd("<inert path>")
 
 # knitr options
@@ -34,16 +34,14 @@ pacman::p_load(tidyverse, readxl, stringr, lubridate, googlesheets, rvest, forca
                grid, gridExtra, htmlTable, highcharter)
 
 # Token to connect to Googlespreadsheets
-
-#token <- gs_auth(cache = FALSE)
-#saveRDS(token, file = "googlesheets_token.rds")
-
 suppressMessages(gs_auth(token = "googlesheets_token.rds", verbose = FALSE))
 
-# Create folder structure
-# Create corresponding fodlers in working directory
+# Create corresponding folders in working directory
 data_path <- "data/"; viz_path <- "viz/"
 
+# Token to connect to Googlespreadsheets
+#token <- gs_auth(cache = FALSE)
+#saveRDS(token, file = "googlesheets_token.rds")
 
 #Set ggplot theme
 ggplot2::theme_set(theme_minimal() + 
@@ -65,7 +63,7 @@ hcoptslang$numericSymbols <- c("k", "M", "B", "T", "P", "E")
 options(highcharter.lang = hcoptslang)
 ```
 
-## tl;dr
+## Summary
 
 1. This notebook documents how we built the [Google Sheet](https://docs.google.com/spreadsheets/d/1TcQDKsTKqq858u0LV7ETY9cunvEIMRpFV3-7gm4fe9Y/edit?usp=sharing) with course and instructor evaluations and clearing prices
 2. There some basic exploratory plots at the end
@@ -74,7 +72,7 @@ options(highcharter.lang = hcoptslang)
 
 ## CourseMatch Sections
 
-To get all sections listed in CourseMatch, we extract the table from the html. Some courses are cross-listed and we create a column to include the other sections a course can be listed as. 
+To get all sections listed in CourseMatch, we extract the table from the html. First, save the home CourseMAtch interface page as a .html file in the data folder. Some courses are cross-listed and we create a column to include the other sections a course can be listed as. 
 
 ```{r parse-coursematch-html}
 # List of sections available for selection within CourseMatch
@@ -100,7 +98,7 @@ coursematch_sections <-
 
 ## Course Information
 
-To get all the information about the Fall 2017 courses, we can use the *export* feature on [Spike](https://spike.wharton.upenn.edu/courses/index.cfm?method=search_courses). Unfortunately, this contains non-MBA classes too (ungraad and PhD). Below we are just showing the top 20 rows.
+To get all the information about the Fall 2017 courses, we can use the *export* feature on [Spike](https://spike.wharton.upenn.edu/courses/index.cfm?method=search_courses). Unfortunately, this contains non-MBA classes too (ungrad and PhD).
 
 ```{r load-all-wharton-courses}
 fall_2018_courses <- 
@@ -121,23 +119,9 @@ course_eval <-
 
 ## Clearing Prices
 
-Clearing price data comes the **public** [MBA Inside website](https://mba-inside.wharton.upenn.edu/course-match/). We loop over the page, download, and combine each of the xlsx files. 
+Clearing price data comes the **public** [MBA Inside website](https://mba-inside.wharton.upenn.edu/course-match/). We save the files corresponding to the last 4 semesters, from Fall 2016 to Spring 2018
 
 ```{r download-clearing-prices}
-base_url <- "https://mba-inside.wharton.upenn.edu/course-match/"
-
-# Read in the base url, find all the links, extract
-# the ones that contain xlsx and then download each
-# one giving it the proper name
-if (params$external_queries) {
-  read_html(base_url) %>%
-    html_nodes('a') %>%
-    html_attr("href") %>%
-    as_tibble() %>%
-    filter(str_detect(value, "xlsx")) %>%
-    mutate(file_name = basename(value)) %>%
-    mutate(a = walk2(value, paste0(data_path, "clearing_prices/", file_name), download.file, mode = "wb"))
-}
 
 # Function to load each xlsx file of clearing prices
 # Need to have a switch because the Fall 2013 file
@@ -207,23 +191,6 @@ fall_2018 <-
   select(-start_date, -end_date, -`Day(s)`)
 ```
 
-We first create a table that contains all the sections that are available on CourseMatch and the useful information about the section: title, instructor, CU, quarter, time, etc.
-
-```{r show_fall_2018, echo = FALSE}
-fall_2018 %>% 
-  sample_n(10) %>% 
-  select(-cross_listed_as) %>%
-  #select(-one_of('cross_listed_as'), one_of('cross_listed_as')) %>%
-  htmlTable(
-    rnames = FALSE
-    , caption = "10 sample rows from of cleaned information about the courses listed in CourseMatch"
-    , css.cell = "padding-left: .5em; padding-right: .5em;"
-    , header = c('Course','Section','Title','Instructor','CU','Days','Quarter','Start Time','End Time')
-    , align = c("ccllccccrr")
-    , col.rgroup = c("none", "#F7F7F7")
-  )
-```
-
 ```{r tbl_questions}
 tbl_questions <- tribble(
   ~question_type, ~question, ~question_abbr
@@ -282,8 +249,6 @@ cross_listed_course <-
   )
 ```
 
-Then we clean the course evaluation data so that it can be aggregated. Here are 10 sample rows:
-
 ```{r course_eval_cleaned}
 course_eval_cleaned <- 
   course_eval %>%
@@ -320,12 +285,12 @@ course_eval_cleaned %>%
 
 # Summaries for Google Sheet
 
-With the course evaluation that Wharton provides we can present that data at two levels of detail:
+We present that data at two levels of detail:
 
 1. **Course View**: Aggregate the reviews for all sections a course was taught
 2. **Instructor View**: Aggregate the reviews for all sections an instructor has taught
 
-We also create both tables and "benchmark" that uses all historical data (not just the courses that will be taught in Fall 2017).
+We also create a "benchmark" that uses all historical data (not just the courses that will be taught in Fall 2017).
 
 ## Course View
 
@@ -379,8 +344,6 @@ course_benchmark <-
 ```
 
 ## Instructor View
-
-The 15 professors with missing evaluations do not have evaluations in Spike, except one professor: Marston, Richard (FNCE731). His evaluation was more than 2 years ago and does not appear in the course evaluations export from Spike.
 
 ```{r instructor_metrics}
 instructor_metrics <- 
@@ -437,7 +400,7 @@ if (params$external_queries) {
 
 # Exploratory Analysis
 
-We figured we'd explore the data bit. Here are a few plots we built. To a do a real analysis, we would need response level data. In practice, we would want to built to confidence intervals to detect where the differences in response are significant before making any comparative statements. We only have the point estimate (mean) and not the standard error so we cannot do anything more sophisicated.
+We figured we'd explore the data bit. Here are a few plots. To a do a real analysis, we would need response level data. In practice, we would want to built to confidence intervals to detect where the differences in response are significant before making any comparative statements. We only have the point estimate (mean) and not the standard error so we cannot do anything more sophisicated.
 
 ## Evaluations by Department
 
@@ -493,8 +456,6 @@ dept_plots <-
   mutate(plot = map(data, fn_spline_plot))
 ```
 
-OIDD and REAL are consistently the top of each of the course metrics. It would be unsurprising to find that the responses to each question are correlated at the user-level.
-
 ```{r course-dept-plots}
 dept_plots %>%
   filter(question_type == "Course") %>%
@@ -503,8 +464,6 @@ dept_plots %>%
                                                                     gp = gpar(fontsize=10),
                                                                     hjust=1, x=1))
 ```
-
-For instructor metrics, OIDD is again the top and STAT and BEPP are again the bottom. 
 
 ```{r instructor-dept-plots, fig.width = 6, fig.height = 5.25}
 dept_plots %>%
@@ -517,8 +476,6 @@ dept_plots %>%
 ```    
 
 ## Which course is the "best bang for your utility"?
-
-The plot below help answer what has historically been the best value (course quality) for your utility. There are many courses that have never had non-zero clearing prices.
 
 ```{r course_quality_to_price}
 course_quality_to_price <-
@@ -552,7 +509,7 @@ course_quality_to_price %>%
   hc_size(height = 700)
 ```
 
-## Top 10 and Bottom 10 Instructors for Fall 2017?
+## Top 10 and Bottom 10 Instructors for Fall 2018?
 
 This list is restricted to those teaching in the fall.
 
@@ -585,30 +542,7 @@ instructor_metrics %>%
     , n.cgroup = c(1,2,2)
     , header = c("Rank", rep(c("Instructor", "Quality"), 2))
     , css.cell = "padding-left: 2em; padding-right: 2em;"
-  ) #%>% htmltools::html_print()
+  )
 
-```
-
-## Number of Course Offerrings by Department
-
-```{r course_offerings}
-course_metrics %>%
-  mutate(dept = str_sub(Course, 1, 4)) %>%
-  group_by(dept) %>%
-  summarise(
-    Courses = n_distinct(Course)
-    , Sections = n()
-  ) %>%
-  gather(metric, value, -dept) %>%
-  hchart("column", hcaes(x = dept, y = value, group = metric)) %>%
-  hc_xAxis(title = list(text = "Department")) %>%
-  hc_yAxis(title = list(text = "Count")) %>%
-  hc_title(text = 'Do some department offer more coures?') %>%
-  hc_subtitle(text = "MGMT and FNCE dominate in number of course offerrings") %>%
-  hc_credits(enabled = TRUE, text = "Note: Cross-listing is counted for each department") %>%
-  hc_add_theme(hc_theme_merge(
-    getOption("highcharter.theme"), 
-    hc_theme(colors = wharton_col[c('wharton_blue','wharton_red')] %>% unname()))) %>%
-  hc_size(height = 600)
 ```
 
